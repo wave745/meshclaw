@@ -30,8 +30,8 @@ apps/android/.cxx/
 *.bun-build
 apps/macos/.build/
 apps/shared/MoltbotKit/.build/
-apps/shared/OpenClawKit/.build/
-apps/shared/OpenClawKit/Package.resolved
+apps/shared/MeshClawKit/.build/
+apps/shared/MeshClawKit/Package.resolved
 **/ModuleCache/
 bin/
 bin/clawdbot-mac
@@ -39,7 +39,7 @@ bin/docs-list
 apps/macos/.build-local/
 apps/macos/.swiftpm/
 apps/shared/MoltbotKit/.swiftpm/
-apps/shared/OpenClawKit/.swiftpm/
+apps/shared/MeshClawKit/.swiftpm/
 Core/
 apps/ios/*.xcodeproj/
 apps/ios/*.xcworkspace/
@@ -99,3 +99,7 @@ package-lock.json
 
 # Local iOS signing overrides
 apps/ios/LocalSigning.xcconfig
+
+# Rust
+target/
+.meshclaw/

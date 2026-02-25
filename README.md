@@ -1,15 +1,54 @@
-# MeshClaw 🦞🔗
+# MeshClaw — The Neighborhood Brain 🦞🔗
 
-Offline-first, community-scale AI agent mesh. Forked/extended from OpenClaw to enable resilient P2P swarms that work without internet.
+**MeshClaw** is a production-grade, offline-first P2P agent mesh. It's designed to turn groups of local devices into a high-performance, decentralized collective intelligence. 
 
-## Status
-- Phase 1 (Neighbors Mode): libp2p + mDNS + GossipSub + basic UI dashboard ✓
-- Next: Distributed memory sync + agent delegation
+Built for environments where the cloud is a luxury—disaster zones, remote research stations, or privacy-hardened teams—MeshClaw ensures your agents stay synchronized and capable, even when the internet goes out.
 
-## Getting Started
-1. Install dependencies: `pnpm install`
-2. Run gateway: `pnpm gateway:watch`
-3. Join the mesh: Use the Mesh tab in the Control UI.
+---
 
-## Security & Protocol
-See [mesh-protocol.md](docs/mesh-protocol.md) and [security.md](docs/security.md) for details.
+## 🌌 The Vision
+
+Traditional AI agents are tethered to the cloud. **MeshClaw** breaks that tether. 
+
+We are building a "Neighborhood Brain": a mesh of local nodes that share memory via CRDTs, discover each other without configuration via mDNS, and delegate tasks based on local capability. It’s not just an agent platform; it’s a resilient infrastructure for the next generation of distributed AI.
+
+## 🏗️ Technical Architecture
+
+MeshClaw has been re-architected from the ground up to favor **Safety**, **Speed**, and **Sovereignty**.
+
+### 🦀 The Core (Rust)
+The engine is a high-performance Rust daemon (`packages/core-rust`) handling the heavy lifting:
+- **Networking:** `libp2p` 0.56 stack with TCP/QUIC transports, noise encryption, and yamux multiplexing.
+- **Discovery:** Zero-config mDNS for local networks and Kademlia DHT for wider mesh discovery.
+- **Synchronization:** `yrs` (Rust Yjs) CRDTs for conflict-free shared memory across peers.
+- **Messaging:** `GossipSub` for efficient delta-broadcasting.
+- **Storage:** Local vector persistence via `sled` / `lancedb` for RAG-at-the-edge.
+
+### 🖥️ The Interface (TypeScript/Tauri)
+A premium dashboard providing:
+- **Mesh Topology:** Real-time visualization of peer connections and health.
+- **Knowledge Graph:** Visual view of the shared CRDT memory state.
+- **Agent Command:** High-level interface to inject goals into the mesh.
+
+---
+
+## ️ Developer Quickstart
+
+To run a MeshClaw node locally from the source:
+
+```bash
+# Clone the repository
+git clone https://github.com/wave745/meshclaw.git
+cd meshclaw
+
+# Run the Rust Core
+cd packages/core-rust
+cargo run
+```
+
+Running multiple instances on the same network will show them automatically discovering each other and synchronizing the "Neighborhood Brain" memory.
+
+---
+
+## ⚖️ License
+MIT - Created by the MeshClaw Collective.

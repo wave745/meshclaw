@@ -93,8 +93,8 @@ export async function initMesh(
                             `Valid mesh message [${validated.data.type}] from ${evt.detail.from.toString()}`,
                         );
                         if (validated.data.type === "memory-sync") {
-                            // Handle memory sync (save to disk)
-                            void handleIncomingMemorySync(evt.detail.from.toString(), validated.data);
+                            const senderId = evt.detail.from.toString();
+                            void handleIncomingMemorySync(senderId, validated.data);
                         }
                     } else {
                         log.warn(`Invalid mesh message received: ${validated.error.message}`);
@@ -125,7 +125,7 @@ export async function broadcastMeshMemory(params: {
         return;
     }
 
-    log.debug(`Broadcasting memory sync for ${params.docId}`);
+    log.info(`Broadcasting memory sync for ${params.docId}`);
     const data = new TextEncoder().encode(
         JSON.stringify({
             type: "memory-sync",
@@ -138,15 +138,34 @@ export async function broadcastMeshMemory(params: {
     await meshNode.services.pubsub.publish("mesh:broadcast", data);
 }
 
+import fs from "node:fs/promises";
+import path from "node:path";
+import { resolveDefaultAgentId, resolveAgentWorkspaceDir } from "../agents/agent-scope.js";
+import { loadConfig } from "../config/config.js";
+
 async function handleIncomingMemorySync(
     senderId: string,
     message: { docId: string; delta: any },
 ) {
-    // In a real implementation, we would save this to the "default" agent's mesh memory dir.
-    // For now, just log it. 
-    // TODO: Implement filesystem write to memory/mesh/<senderId>/<docId>
-    log.info(`Received memory sync from [${senderId}] for [${message.docId}]`);
+    try {
+        const config = await loadConfig();
+        const defaultAgentId = resolveDefaultAgentId(config);
+        const workspaceDir = resolveAgentWorkspaceDir(config, defaultAgentId);
+
+        // mesh memory lives in a subdirectory of the agent workspace
+        const meshMemoryRoot = path.join(workspaceDir, "memory", "mesh", senderId);
+        await fs.mkdir(meshMemoryRoot, { recursive: true });
+
+        const filePath = path.join(meshMemoryRoot, message.docId);
+        await fs.writeFile(filePath, String(message.delta), "utf-8");
+
+        log.info(`Synced remote memory from [${senderId}]: ${message.docId}`);
+    } catch (err) {
+        log.error(`Failed to save incoming memory sync: ${String(err)}`);
+    }
 }
+
+import { meshRustClient } from "./mesh-rust-client.js";
 
 export const meshHandlers: GatewayRequestHandlers = {
     "mesh:join": async (opts: GatewayRequestHandlerOptions) => {
@@ -154,17 +173,27 @@ export const meshHandlers: GatewayRequestHandlers = {
         opts.respond(true, { meshId: currentMeshId });
     },
     "mesh:broadcast": async (opts: GatewayRequestHandlerOptions) => {
-        if (!meshNode || !meshNode.services.pubsub) {
-            return opts.respond(false, { error: "Mesh layer not initialized" });
-        }
+        const canJsNode = meshNode && meshNode.services.pubsub;
+
         log.info(`Broadcasting mesh message: ${JSON.stringify(opts.params)}`);
-        const data = new TextEncoder().encode(
-            JSON.stringify({
-                type: "broadcast",
-                data: opts.params,
-            }),
-        );
-        await meshNode.services.pubsub.publish("mesh:broadcast", data);
+
+        // Broadcast in JS mesh
+        if (canJsNode) {
+            const data = new TextEncoder().encode(
+                JSON.stringify({
+                    type: "broadcast",
+                    data: opts.params,
+                }),
+            );
+            await meshNode.services.pubsub.publish("mesh:broadcast", data);
+        }
+
+        // Also proxy to Rust mesh
+        meshRustClient.broadcast(JSON.stringify({
+            type: "broadcast",
+            data: opts.params,
+        }));
+
         opts.respond(true);
     },
     "mesh:status": async (opts: GatewayRequestHandlerOptions) => {

@@ -1,6 +1,7 @@
 import { Type } from "@sinclair/typebox";
-import { SESSION_LABEL_MAX_LENGTH } from "../../../sessions/session-label.js";
 import { GATEWAY_CLIENT_IDS, GATEWAY_CLIENT_MODES } from "../client-info.js";
+
+const SESSION_LABEL_MAX_LENGTH = 100;
 
 export const NonEmptyString = Type.String({ minLength: 1 });
 export const SessionLabelString = Type.String({

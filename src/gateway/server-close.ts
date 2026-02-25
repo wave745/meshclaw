@@ -1,6 +1,5 @@
 import type { Server as HttpServer } from "node:http";
 import type { WebSocketServer } from "ws";
-import type { CanvasHostHandler, CanvasHostServer } from "../canvas-host/server.js";
 import { type ChannelId, listChannelPlugins } from "../channels/plugins/index.js";
 import { stopGmailWatcher } from "../hooks/gmail-watcher.js";
 import type { HeartbeatRunner } from "../infra/heartbeat-runner.js";
@@ -9,8 +8,6 @@ import type { PluginServicesHandle } from "../plugins/services.js";
 export function createGatewayCloseHandler(params: {
   bonjourStop: (() => Promise<void>) | null;
   tailscaleCleanup: (() => Promise<void>) | null;
-  canvasHost: CanvasHostHandler | null;
-  canvasHostServer: CanvasHostServer | null;
   stopChannel: (name: ChannelId, accountId?: string) => Promise<void>;
   pluginServices: PluginServicesHandle | null;
   cron: { stop: () => void };
@@ -47,25 +44,11 @@ export function createGatewayCloseHandler(params: {
     if (params.tailscaleCleanup) {
       await params.tailscaleCleanup();
     }
-    if (params.canvasHost) {
-      try {
-        await params.canvasHost.close();
-      } catch {
-        /* ignore */
-      }
-    }
-    if (params.canvasHostServer) {
-      try {
-        await params.canvasHostServer.close();
-      } catch {
-        /* ignore */
-      }
-    }
     for (const plugin of listChannelPlugins()) {
       await params.stopChannel(plugin.id);
     }
     if (params.pluginServices) {
-      await params.pluginServices.stop().catch(() => {});
+      await params.pluginServices.stop().catch(() => { });
     }
     await stopGmailWatcher();
     params.cron.stop();
@@ -104,9 +87,9 @@ export function createGatewayCloseHandler(params: {
       }
     }
     params.clients.clear();
-    await params.configReloader.stop().catch(() => {});
+    await params.configReloader.stop().catch(() => { });
     if (params.browserControl) {
-      await params.browserControl.stop().catch(() => {});
+      await params.browserControl.stop().catch(() => { });
     }
     await new Promise<void>((resolve) => params.wss.close(() => resolve()));
     const servers =

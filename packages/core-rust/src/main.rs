@@ -145,32 +145,49 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let vector_db = VectorDb::new().await;
     vector_db.add("note1", vec![0.1; 384], "Initial knowledge").await;
 
+    // Multi-capability registration
+    let capabilities = vec!["llm:llama3", "tool:websearch", "memory:lancedb"];
+    for cap in capabilities {
+        let key = kad::RecordKey::from(format!("cap:{}", cap).into_bytes());
+        let value = serde_json::to_vec(&serde_json::json!({
+            "peer": local_peer_id.to_string(),
+            "timestamp": std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs()
+        })).unwrap();
+        let record = kad::Record { key, value, publisher: Some(local_peer_id), expires: None };
+        if let Err(e) = swarm.behaviour_mut().kad.put_record(record, kad::Quorum::One) {
+            eprintln!("Failed to put record for {}: {}", cap, e);
+        }
+    }
+
     // Kademlia Bootstrap
     if let Err(e) = swarm.behaviour_mut().kad.bootstrap() {
         eprintln!("Kademlia bootstrap warning: {e}");
     }
 
-    // Advertise capability
-    let key = kad::RecordKey::from(b"capability:embedding".to_vec());
-    let value = serde_json::to_vec(&serde_json::json!({
-        "peer": local_peer_id.to_string(), 
-        "dim": 384
-    })).unwrap();
-    let record = kad::Record { key, value, publisher: Some(local_peer_id), expires: None };
-    swarm.behaviour_mut().kad.put_record(record, kad::Quorum::One).unwrap();
-
     let topic = gossipsub::IdentTopic::new("mesh:broadcast");
     swarm.behaviour_mut().gossipsub.subscribe(&topic)?;
 
     let mut broadcast_timer = tokio::time::interval(Duration::from_secs(10));
+    let mut pending_delegations = std::collections::HashMap::<kad::QueryId, SyncMessage>::new();
 
     loop {
         tokio::select! {
             bridge_msg = gateway_to_rust_rx.recv() => {
                 if let Some(msg) = bridge_msg {
-                    if let Ok(data) = serde_json::to_vec(&msg) {
-                        if let Err(e) = swarm.behaviour_mut().gossipsub.publish(topic.clone(), data) {
-                            eprintln!("Bridge publish error: {e}");
+                    match &msg {
+                        SyncMessage::Delegate { assignee_id, task_desc, .. } if assignee_id == "any" || assignee_id.starts_with("cap:") => {
+                            // Find provider via DHT
+                            let cap_query = if assignee_id == "any" { "cap:llm:llama3" } else { assignee_id };
+                            println!("Searching DHT for capability: {}", cap_query);
+                            let query_id = swarm.behaviour_mut().kad.get_record(kad::RecordKey::from(cap_query.as_bytes().to_vec()));
+                            pending_delegations.insert(query_id, msg.clone());
+                        },
+                        _ => {
+                            if let Ok(data) = serde_json::to_vec(&msg) {
+                                if let Err(e) = swarm.behaviour_mut().gossipsub.publish(topic.clone(), data) {
+                                    eprintln!("Bridge publish error: {e}");
+                                }
+                            }
                         }
                     }
                 }
@@ -231,18 +248,85 @@ async fn main() -> Result<(), Box<dyn Error>> {
                                         println!("Current shared note1: {text}");
                                     }
                                 },
+                                SyncMessage::KnowledgeUpdate { key, value } => {
+                                    println!("Received high-level knowledge update for '{}'", key);
+                                    memory.insert_text(&key, &value);
+                                },
                                 SyncMessage::Query(q) => {
                                     println!("Received query from {peer_id:?}: {q}");
                                 },
-                                SyncMessage::Delegate { task_id, .. } => {
-                                    println!("Received delegation request from {peer_id:?}: {task_id}");
+                                SyncMessage::Delegate { task_id, task_desc, assignee_id, .. } => {
+                                    if assignee_id == local_peer_id.to_string() {
+                                        println!("🦞 Local Agent: Processing task '{}' via Ollama [{}]", task_desc, task_id);
+                                        
+                                        let rust_to_gateway_tx = rust_to_gateway_tx.clone();
+                                        let task_id_clone = task_id.clone();
+                                        let prompt = task_desc.clone();
+
+                                        tokio::spawn(async move {
+                                            let client = reqwest::Client::new();
+                                            let ollama_url = "http://localhost:11434/api/generate";
+                                            
+                                            let payload = serde_json::json!({
+                                                "model": "llama3",
+                                                "prompt": prompt,
+                                                "stream": false
+                                            });
+
+                                            let result = match client.post(ollama_url).json(&payload).send().await {
+                                                Ok(resp) => {
+                                                    if let Ok(json) = resp.json::<serde_json::Value>().await {
+                                                        json["response"].as_str().unwrap_or("Empty response from Ollama").to_string()
+                                                    } else {
+                                                        "Failed to parse Ollama JSON".to_string()
+                                                    }
+                                                },
+                                                Err(e) => format!("Ollama connection failed: {}. Is Ollama running?", e)
+                                            };
+
+                                            println!("🦞 Local Agent: Task '{}' completed", task_id_clone);
+                                            let _ = rust_to_gateway_tx.send(serde_json::json!({
+                                                "type": "event",
+                                                "method": "mesh:agent:result",
+                                                "params": {
+                                                    "taskId": task_id_clone,
+                                                    "status": "completed",
+                                                    "result": result
+                                                }
+                                            }));
+                                        });
+                                    }
                                 }
                                 _ => {}
                             }
                         }
                     }
-                    MeshBehaviourEvent::Kad(kad::Event::OutboundQueryProgressed { result: kad::QueryResult::GetRecord(Ok(ok)), .. }) => {
-                        println!("DHT record found: {:?}", ok);
+                    MeshBehaviourEvent::Kad(kad::Event::OutboundQueryProgressed { id, result, .. }) => {
+                        match result {
+                            kad::QueryResult::GetRecord(Ok(kad::GetRecordOk::FoundRecord(record))) => {
+                                if let Some(mut original_msg) = pending_delegations.remove(&id) {
+                                    if let SyncMessage::Delegate { ref mut assignee_id, .. } = original_msg {
+                                        if let Ok(val) = serde_json::from_slice::<serde_json::Value>(&record.record.value) {
+                                            if let Some(peer_str) = val.get("peer").and_then(|v| v.as_str()) {
+                                                println!("Found provider for task: {peer_str}");
+                                                *assignee_id = peer_str.to_string();
+                                                
+                                                if let Ok(data) = serde_json::to_vec(&original_msg) {
+                                                    if let Err(e) = swarm.behaviour_mut().gossipsub.publish(topic.clone(), data) {
+                                                        eprintln!("DHT-routed publish error: {e}");
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            kad::QueryResult::GetRecord(Err(e)) => {
+                                eprintln!("DHT lookup failed for query {:?}: {:?}", id, e);
+                                pending_delegations.remove(&id);
+                            },
+                            _ => {}
+                        }
                     }
                     MeshBehaviourEvent::Ping(ping::Event { peer, result, .. }) => {
                         println!("Ping to {peer}: {:?}", result);

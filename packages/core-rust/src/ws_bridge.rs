@@ -52,6 +52,11 @@ pub async fn run_ws_server(
                                         let response = serde_json::json!({ "id": id, "result": list });
                                         let _ = ws_stream.send(Message::Text(response.to_string())).await;
                                     },
+                                    Some("keys") | Some("mesh:keys") => {
+                                        let list = memory.get_keys();
+                                        let response = serde_json::json!({ "id": id, "result": list });
+                                        let _ = ws_stream.send(Message::Text(response.to_string())).await;
+                                    },
                                     Some("broadcast") => {
                                         if let Some(params) = json.get("params") {
                                             if let Ok(sync_msg) = serde_json::from_value::<meshclaw_core::sync::SyncMessage>(params.clone()) {
@@ -65,10 +70,16 @@ pub async fn run_ws_server(
                                     },
                                     _ => {
                                         if let Ok(sync_msg) = serde_json::from_value::<meshclaw_core::sync::SyncMessage>(json.clone()) {
-                                            let _ = gateway_to_rust_tx.send(sync_msg.clone()).await;
-                                            if let meshclaw_core::sync::SyncMessage::MemorySync { delta, .. } = sync_msg {
-                                                let _ = memory.apply_update(delta);
+                                            match &sync_msg {
+                                                meshclaw_core::sync::SyncMessage::KnowledgeUpdate { key, value } => {
+                                                    memory.insert_text(key, value);
+                                                },
+                                                meshclaw_core::sync::SyncMessage::MemorySync { delta, .. } => {
+                                                    let _ = memory.apply_update(delta.clone());
+                                                },
+                                                _ => {}
                                             }
+                                            let _ = gateway_to_rust_tx.send(sync_msg.clone()).await;
                                         }
                                     }
                                 }

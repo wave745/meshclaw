@@ -1,6 +1,6 @@
 {
   "name": "@meshclaw/monorepo",
-  "version": "0.1.0-alpha",
+  "version": "0.2.0",
   "description": "MeshClaw — Offline-first P2P agent swarm infrastructure for collective intelligence in disconnected environments.",
   "keywords": [],
   "homepage": "https://github.com/wave745/meshclaw#readme",

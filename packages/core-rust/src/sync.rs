@@ -40,6 +40,17 @@ pub enum SyncMessage {
         payload: serde_json::Value,
         timestamp: u64,
     },
+    #[serde(rename = "capability")]
+    Capability {
+        node_id: String,
+        capability: String,
+        metadata: serde_json::Value,
+    },
+    #[serde(rename = "knowledge-update")]
+    KnowledgeUpdate {
+        key: String,
+        value: String,
+    },
     Query(String),
 }
 
@@ -92,10 +103,23 @@ impl MemorySync {
         Some(val.to_string(&txn))
     }
 
+    pub fn get_keys(&self) -> Vec<String> {
+        let txn = self.doc.transact();
+        if let Some(map) = txn.get_map("shared") {
+            map.keys(&txn).collect()
+        } else {
+            Vec::new()
+        }
+    }
+
     pub fn insert_text(&self, key: &str, value: &str) {
         let mut txn = self.doc.transact_mut();
         let map = txn.get_or_insert_map("shared");
         let text: TextRef = map.get_or_init(&mut txn, key);
+        let len = text.len(&txn);
+        if len > 0 {
+            text.remove_range(&mut txn, 0, len);
+        }
         text.push(&mut txn, value);
     }
 }

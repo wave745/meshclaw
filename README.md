@@ -1,6 +1,6 @@
 # MeshClaw — The Neighborhood Brain 🦞🔗
 
-Offline-first, community-scale AI agent mesh.  
+Offline-first P2P collective intelligence layer for autonomous AI agents.
 Resilient P2P swarms that work anywhere — no internet, no central server.
 
 ---

@@ -1,8 +1,7 @@
 # MeshClaw — The Neighborhood Brain 🦞🔗
 
-**MeshClaw** is a production-grade, offline-first P2P agent mesh. It's designed to turn groups of local devices into a high-performance, decentralized collective intelligence. 
-
-Built for environments where the cloud is a luxury—disaster zones, remote research stations, or privacy-hardened teams—MeshClaw ensures your agents stay synchronized and capable, even when the internet goes out.
+Offline-first, community-scale AI agent mesh.  
+Resilient P2P swarms that work anywhere — no internet, no central server.
 
 ---
 
@@ -47,6 +46,26 @@ cargo run
 ```
 
 Running multiple instances on the same network will show them automatically discovering each other and synchronizing the "Neighborhood Brain" memory.
+
+## ⚙️ Configuration
+
+MeshClaw uses environment variables for configuration. See `.env.example` for a complete list.
+
+- `MESHCLAW_STATE_DIR`: Directory for local storage (default: `./.meshclaw`)
+- `MESHCLAW_BRIDGE_PORT`: WS port for the Rust-to-Gateway bridge (default: `3001`)
+- `OPENCLAW_CONFIG_PATH`: Path to gateway configuration file
+- `RUST_LOG`: Log level for the Rust core (e.g., `info`, `debug`)
+
+## 🧪 Testing
+
+To test a multi-node mesh locally:
+
+```bash
+# Start two Rust nodes and a gateway automatically
+./scripts/test-multi-node.sh
+```
+
+---
 
 ---
 

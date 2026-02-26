@@ -30,7 +30,7 @@ async function testRpc() {
                         mode: 'test'
                     },
                     auth: {
-                        token: 'fd60f4631d88d44b074597731937944b2bfa98189329d213'
+                        token: process.env.GATEWAY_TOKEN || 'YOUR_SECURE_TOKEN'
                     }
                 }
             }));
@@ -57,7 +57,8 @@ async function testRpc() {
                     type: 'req',
                     id: 'query-req',
                     method: 'mesh:query',
-                    params: { key: 'note1' }
+                    params: { key: 'note1' },
+                    auth: { token: process.env.GATEWAY_TOKEN || 'YOUR_SECURE_TOKEN' }
                 }));
             }
 

@@ -3,7 +3,7 @@
         "port": 18795,
         "auth": {
             "mode": "token",
-            "token": "fd60f4631d88d44b074597731937944b2bfa98189329d213"
+            "token": "YOUR_SECURE_TOKEN"
         }
     },
     "mesh": {

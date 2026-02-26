@@ -16,7 +16,7 @@ async function monitorEvents() {
                 minProtocol: 1,
                 maxProtocol: 1,
                 client: { id: 'test', version: '0.1.0', platform: 'node', mode: 'test' },
-                auth: { token: 'fd60f4631d88d44b074597731937944b2bfa98189329d213' }
+                auth: { token: process.env.GATEWAY_TOKEN || 'YOUR_SECURE_TOKEN' }
             }
         }));
     });
